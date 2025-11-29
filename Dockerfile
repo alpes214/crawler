@@ -20,6 +20,8 @@ RUN apt-get update && apt-get install -y \
 # Copy requirements files
 COPY requirements.txt requirements-dev.txt ./
 
+# Install system dependencies for lxml
+RUN apt-get update && apt-get install -y libxml2-dev libxslt-dev
 # Install Python dependencies
 RUN pip install --upgrade pip && \
     pip install -r requirements.txt
