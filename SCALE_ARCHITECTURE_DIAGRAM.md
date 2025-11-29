@@ -107,7 +107,7 @@ Each region is independent and identical. This shows the detailed architecture f
             │  Pod Pool   │  │  Pod Pool   │  │  Pod Pool   │
             │             │  │             │  │             │
             │ K8s Deploy: │  │ K8s Deploy: │  │ K8s Deploy: │
-            │ 300-400     │  │ 300-400     │  │ 300-400     │
+            │ 100-1000    │  │ 100-1000    │  │ 100-1000    │
             │ replicas    │  │ replicas    │  │ replicas    │
             │             │  │             │  │             │
             │ Resources:  │  │ Resources:  │  │ Resources:  │
@@ -272,57 +272,7 @@ Regional Metrics:
 ### RabbitMQ Cluster Configuration
 
 **3-Node Setup**:
-```yaml
-# RabbitMQ Cluster
-nodes: 3
-resources_per_node:
-  cpu: 8
-  memory: 16Gi
-  storage: 500Gi
-
-clustering:
-  policy: ha-all
-  queue_mirroring: automatic
-  sync_mode: automatic
-
-capacity:
-  theoretical_max: 150,000 msg/sec
-  comfortable_max: 50,000 msg/sec
-  your_sustained: 860 msg/sec (1.7% utilization)
-  your_peak: 2,571 msg/sec (5.1% utilization)
-  your_burst: 10,000 msg/sec (20% utilization)
-```
-
-**Why 3 Nodes**:
-- High availability (tolerates 1 node failure)
-- Queue mirroring across nodes
-- Load distribution
-- Still simple to manage (vs Kafka)
-
-**Queue Configuration**:
-```yaml
-crawl_queue:
-  mirrored: true
-  durable: true
-  message_ttl: 86400  # 24 hours
-  max_length: 1000000
-  expected_load: 430 msg/sec
-
-parse_queue:
-  mirrored: true
-  durable: true
-  message_ttl: 86400
-  max_length: 1000000
-  expected_load: 430 msg/sec
-
-priority_queue:
-  mirrored: true
-  durable: true
-  message_ttl: 3600  # 1 hour (urgent)
-  max_length: 100000
-  expected_load: 0-50 msg/sec
-```
-
+TBD
 ---
 
 ## Worker Scaling Strategy
@@ -330,55 +280,7 @@ priority_queue:
 ### Auto-Scaling Configuration
 
 **Crawler Workers**:
-```yaml
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: crawler-workers
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: crawler-workers
-  minReplicas: 50
-  maxReplicas: 100
-  metrics:
-  - type: Resource
-    resource:
-      name: cpu
-      target:
-        type: Utilization
-        averageUtilization: 70
-  - type: Pods
-    pods:
-      metric:
-        name: queue_depth
-      target:
-        type: AverageValue
-        averageValue: "100"
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 60
-      policies:
-      - type: Percent
-        value: 50
-        periodSeconds: 60
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-      - type: Pods
-        value: 5
-        periodSeconds: 60
-```
-
-**Parser Workers**:
-```yaml
-# Similar to crawler workers
-minReplicas: 50
-maxReplicas: 100
-targetCPU: 70%
-targetQueueDepth: 100
-```
+TBD
 
 ---
 
@@ -445,40 +347,6 @@ User → API (POST /api/products/search {"query": "wireless headphones"})
 
 ---
 
-## Monitoring & Observability
-
-### Key Metrics Per Region
-
-**RabbitMQ**:
-- Queue depth (crawl_queue, parse_queue, priority_queue)
-- Message rate (in/out per second)
-- Consumer count (active workers)
-- Node health (3/3 healthy)
-- Memory usage per node
-- Disk usage per node
-
-**Workers**:
-- Active pod count (crawler, parser, priority)
-- CPU utilization per pod
-- Memory utilization per pod
-- Task success rate
-- Task failure rate
-- Average task duration
-- Queue processing lag
-
-**Databases**:
-- PostgreSQL: Write throughput, read throughput, replication lag, connection pool usage
-- Elasticsearch: Indexing rate, search latency, cluster health, disk usage
-- Redis: Hit rate, memory usage, evictions
-
-**API**:
-- Request rate (per endpoint)
-- Response time (p50, p95, p99)
-- Error rate (4xx, 5xx)
-- Cache hit rate (CDN + Redis combined)
-
----
-
 ## Capacity Planning
 
 ### Current vs Max Capacity (Per Region)
@@ -530,41 +398,3 @@ Plus global services:
 **Grand Total**: **$585,840/month**
 
 ---
-
-## Deployment Strategy
-
-### Phase 1: Single Region MVP
-```bash
-# Deploy to US-EAST
-kubectl config use-context us-east-k8s
-helm install crawler ./crawler-chart --values values-us-east.yaml
-```
-
-### Phase 2: Add Second Region
-```bash
-# Deploy to EU-WEST
-kubectl config use-context eu-west-k8s
-helm install crawler ./crawler-chart --values values-eu-west.yaml
-
-# Configure cross-region replication
-# - S3 replication rule
-# - PostgreSQL standby replica
-# - Elasticsearch cross-cluster search
-```
-
-### Phase 3: Add Remaining Regions
-```bash
-# Deploy to ASIA-SOUTH
-helm install crawler ./crawler-chart --values values-asia-south.yaml
-
-# Deploy to US-WEST
-helm install crawler ./crawler-chart --values values-us-west.yaml
-```
-
-### Phase 4: Enable Global Traffic Routing
-```bash
-# Configure GeoDNS
-# Configure CDN
-# Set up health checks
-# Enable automatic failover
-```

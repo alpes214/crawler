@@ -335,3 +335,28 @@ Session focused on scaling architecture decisions, core table design enhancement
 - SCALE_ARCHITECTURE_DECISIONS.md is now more concise while preserving critical information
 - AI_CONVERSATIONS.md fully updated with Session 11 details
 - Ready for next phase of work
+
+---
+
+## Session 12 (Continued) - 2025-11-29
+
+**User Request**: Refine scale architecture documents and add workload calculations
+
+**Summary**:
+- User refined SCALE_ARCHITECTURE_DECISIONS.md and SCALE_ARCHITECTURE_DIAGRAM.md with TBD markers
+- Created SCALE_LOAD_ESTIMATIONS.md to document calculation methodology (4B pages/month → 860 msg/sec)
+- Verified consistency across documents, found 3 numerical inconsistencies
+- **Critical architectural clarification**: Split query types across three systems (Elasticsearch, ClickHouse, PostgreSQL)
+- Updated load estimates to reflect proper query routing strategy
+
+**Key Decisions**:
+- Query routing: 35% Elasticsearch (search), 45% ClickHouse (analytics), 15% PostgreSQL (operational), 5% internal
+- Elasticsearch: Needs 20 nodes (not 10) for 3.4M search qps with 97% caching
+- ClickHouse: 10-15 nodes for 4.4M analytics qps at 44% utilization
+- PostgreSQL: Only 110K reads/sec (22% utilization) with proper query routing - no longer overloaded
+- Redis: Caches operational queries only, not search/analytics
+
+**Documents Created/Updated**:
+- Created SCALE_LOAD_ESTIMATIONS.md with query type breakdown and capacity calculations
+- Updated SCALE_ARCHITECTURE_DECISIONS.md with clickable reference links
+- Identified 3 inconsistencies in SCALE_ARCHITECTURE_DIAGRAM.md (pending fixes)
