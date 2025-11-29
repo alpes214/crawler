@@ -61,6 +61,8 @@ crawler/
    docker-compose up -d
    ```
 
+   Note: The database 'crawler' is automatically created on first startup via the init script in `docker/init-db/`.
+
 4. **Run database migrations**
    ```bash
    docker-compose exec fastapi alembic upgrade head

@@ -242,3 +242,31 @@ Track of Claude Code interactions and brief summaries.
 - Confirmed all dependencies compatible with Python 3.13 and target architecture
 - Architecture integrity maintained: FastAPI + PostgreSQL + Elasticsearch + RabbitMQ/Celery
 - Ready for testing
+
+---
+
+## Session 10 - 2025-11-29
+
+**User Request**: Review database schema and create auto-initialization script for PostgreSQL database
+
+**Summary**:
+- Created comprehensive DATABASE_SCHEMA.md with all 5 tables (domains, crawl_tasks, products, images, proxies)
+- Copied complete schema documentation into ARCHITECTURE_DECISIONS.md
+- Created PostgreSQL initialization script that runs automatically on container first start
+- Updated docker-compose.yml to mount init script to /docker-entrypoint-initdb.d
+- Fixed healthcheck to test specific database: pg_isready -d crawler
+
+**Database Schema**:
+- 5 tables with full column definitions, indexes, and relationships
+- Status enum for crawl_tasks lifecycle (pending → queued → crawling → downloaded → parsing → completed/failed)
+- Elasticsearch index mapping for full-text search
+- Sample queries for common operations
+- Migration strategy with Alembic
+
+**Key Actions**:
+- Created docker/init-db/01-init.sql - auto-creates database and enables extensions (uuid-ossp, pg_trgm)
+- Mounted init script in docker-compose.yml postgres service
+- Updated README with note about automatic database creation
+- Schema aligns 100% with original architecture requirements
+
+**Solution**: Database 'crawler' now auto-creates on first docker-compose up via PostgreSQL's /docker-entrypoint-initdb.d mechanism
