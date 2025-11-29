@@ -359,3 +359,114 @@ Track of Claude Code interactions and brief summaries.
 - Realistic cost projections based on actual usage
 - Smart optimization: no premature infrastructure deployment
 - ClickHouse strategy documented for future analytics needs
+
+**Database Schema Review**:
+- Reviewed complete database schema (5 tables: domains, crawl_tasks, products, images, proxies)
+- Schema rated 9/10 - excellent for MVP
+- Identified future enhancements: price history, parser version tracking, geo-targeting
+- Focus shifted to three core tables: domains, crawl_tasks, proxies
+
+**Core Tables Enhancement - Restart Capabilities**:
+- Enhanced crawl_tasks table with restart fields:
+  - `recrawl_count` - track recrawl attempts
+  - `is_recurring` - enable automatic rescheduling
+  - `created_by` - audit trail
+  - `http_status_code`, `response_time_ms` - diagnostics
+  - `proxy_id` - FK to track which proxy was used
+- Enhanced status enum with admin control: PAUSED, CANCELLED, QUEUED_PARSE
+- Four restart mechanisms documented:
+  1. Scheduled recrawl (automatic via Celery Beat)
+  2. Manual restart via API (full or parsing-only)
+  3. Pause/Resume mechanism
+  4. Priority change/re-prioritize
+- Complete state machine diagram with all transitions
+- Scheduler logic with pseudo-code implementation
+
+**Proxy-Domain Relationship Design**:
+- User requirement: Each domain needs dedicated proxy pool with intelligent rotation
+- Created `domain_proxies` junction table (many-to-many relationship)
+- Tracks per-domain proxy performance:
+  - `last_used_at` per domain (enables LRU rotation)
+  - `success_count`/`failure_count` per domain
+  - `avg_response_time_ms` per domain
+- Four proxy selection strategies documented:
+  1. LRU (recommended for MVP) - simple, even distribution
+  2. Weighted health score - prioritize healthy proxies
+  3. Randomized LRU - anti-detection
+  4. Geographic/provider rotation - diversity
+- Proxy pool sizing formula and recommendations
+- Complete API endpoints for domain-proxy management (5 endpoints)
+- Monitoring queries and alert triggers
+- Sample data showing amazon.com with 3 proxies, ebay.com with 2 proxies
+
+**Documents Created/Updated**:
+1. **CORE_TABLES_DESIGN.md** - Complete design for 4 core tables with restart capabilities
+2. **PROXY_DOMAIN_STRATEGY.md** - Detailed proxy-domain mapping strategy
+3. **CORE_TABLES_DESIGN.md** (updated) - Added domain_proxies as 4th core table
+
+**Key Architectural Decisions**:
+- Junction table `domain_proxies` for many-to-many relationship
+- LRU strategy ensures different proxy every hour automatically
+- Per-domain stats track proxy performance (same proxy behaves differently per domain)
+- Auto-disable failing domain-proxy combinations after 5 failures
+- Proxy pool sizing: 2-3 proxies for 10 URLs/hour, 5-7 for 100 URLs/hour
+- Cascade delete: removing domain or proxy removes mappings automatically
+
+**Implementation Ready**:
+- Complete SQL schemas with indexes and constraints
+- ProxyService class design with get_proxy_for_domain() and mark_proxy_used()
+- Crawler worker integration example
+- API endpoint specifications with request/response examples
+- Sample queries for all common operations
+- Monitoring and alerting queries
+
+**API Documentation Refactoring**:
+- User requested: Create CORE_API_DESIGN.md for all API endpoint specifications
+- Created comprehensive CORE_API_DESIGN.md document:
+  - 38+ endpoints across 6 functional groups
+  - Complete request/response formats for all endpoints
+  - Error codes and HTTP status codes
+  - Authentication strategy (Phase 1-3 roadmap)
+  - Rate limiting specifications
+  - Webhook notifications (future)
+  - FastAPI implementation notes with code examples
+- Moved all API endpoint details from CORE_TABLES_DESIGN.md to CORE_API_DESIGN.md
+- Updated CORE_TABLES_DESIGN.md with references to CORE_API_DESIGN.md
+- Kept SQL operations in CORE_TABLES_DESIGN.md for database-level reference
+
+**CORE_API_DESIGN.md Contents**:
+1. **Crawl Task Management API** (12 endpoints):
+   - Submit task (single/batch)
+   - Get task details / List with filters
+   - Restart (full / parsing-only / bulk-failed)
+   - Pause / Resume / Cancel
+   - Change priority
+   - Get statistics
+2. **Domain Management API** (7 endpoints):
+   - CRUD operations
+   - Enable/Disable
+   - Refresh robots.txt
+3. **Proxy Management API** (7 endpoints):
+   - CRUD operations
+   - Enable/Disable
+   - Delete with cascade
+4. **Domain-Proxy Management API** (6 endpoints):
+   - Assign/Remove proxies
+   - List with performance stats
+   - Enable/Disable mappings
+   - Get aggregate stats
+5. **Product Query API** (3 endpoints):
+   - Full-text search (Elasticsearch)
+   - Get product details
+   - List with filters
+6. **System Monitoring API** (3 endpoints):
+   - Health check
+   - System statistics
+   - Queue status
+
+**API Design Features**:
+- Consistent response format (success, data, message)
+- Pagination support (page, per_page, total)
+- Comprehensive error codes (12 error types)
+- Query parameter filtering and sorting
+- Future: JWT authentication, rate limiting, webhooks
