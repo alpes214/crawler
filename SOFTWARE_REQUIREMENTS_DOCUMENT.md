@@ -138,10 +138,12 @@ The system crawls product pages, extracts structured data, stores it in a search
 | NFR-1.2 | System parses products per second per worker | 10-50 products/sec | High |
 | NFR-1.3 | Product search query response time | < 3 seconds | High |
 | NFR-1.4 | API response time (p95) for simple queries | < 100ms | High |
-| NFR-1.5 | Database write capacity (at scale) | 50,000 inserts/sec | Medium |
-| NFR-1.6 | Database read capacity (at scale) | 500,000 queries/sec | Medium |
+| NFR-1.5 | PostgreSQL write capacity (at scale) | 50,000 inserts/sec | Medium |
+| NFR-1.6 | PostgreSQL read capacity (at scale) | 500,000 queries/sec (operational queries) | Medium |
 | NFR-1.7 | Elasticsearch indexing rate (at scale) | 100,000 docs/sec | Medium |
-| NFR-1.8 | Average HTTP response time | < 500ms | High |
+| NFR-1.8 | Elasticsearch search rate (at scale) | 85,000 queries/sec (with 97% caching) | Medium |
+| NFR-1.9 | ClickHouse query capacity (at scale) | 10M+ queries/sec (analytics queries) | Medium |
+| NFR-1.10 | Average HTTP response time | < 500ms | High |
 
 ### 3.2 Scalability
 
@@ -156,6 +158,8 @@ The system crawls product pages, extracts structured data, stores it in a search
 | NFR-2.7 | Global query capacity (at scale) | 100 billion queries/month | Low |
 | NFR-2.8 | RabbitMQ message throughput | 150,000 msg/sec | Medium |
 | NFR-2.9 | API query capacity per region (at scale) | 10M queries/sec | Low |
+| NFR-2.10 | Elasticsearch cluster size (at scale) | 20 nodes (3 master + 17 data) per region | Low |
+| NFR-2.11 | ClickHouse cluster size (at scale) | 10-15 nodes per region for analytics | Low |
 
 ### 3.3 Reliability
 
@@ -175,13 +179,14 @@ The system crawls product pages, extracts structured data, stores it in a search
 
 | ID | Requirement | Configuration | Priority |
 |----|-------------|---------------|----------|
-| NFR-4.1 | PostgreSQL high availability | Primary + 2-10 read replicas | High |
+| NFR-4.1 | PostgreSQL high availability | Primary + 2-10 read replicas (2 at 10% load, 10 at 100% load) | High |
 | NFR-4.2 | RabbitMQ high availability | 3-node cluster with queue mirroring | High |
-| NFR-4.3 | Elasticsearch high availability | 3 master + 7-10 data nodes | Medium |
-| NFR-4.4 | Cross-region replication | Async replication for disaster recovery | Low |
-| NFR-4.5 | Multi-region failover (at scale) | Automatic failover | Low |
-| NFR-4.6 | CDN cache hit rate (at scale) | 85-90% | Low |
-| NFR-4.7 | Redis cache hit rate (at scale) | 85-90% | Low |
+| NFR-4.3 | Elasticsearch high availability | 3 master + 17 data nodes (20 total) | Medium |
+| NFR-4.4 | ClickHouse high availability | 10-15 node cluster for analytics queries | Medium |
+| NFR-4.5 | Cross-region replication | Async replication for disaster recovery | Low |
+| NFR-4.6 | Multi-region failover (at scale) | Automatic failover | Low |
+| NFR-4.7 | CDN cache hit rate (at scale) | 85-90% for search queries | Low |
+| NFR-4.8 | Redis cache hit rate (at scale) | 90% for operational queries | Low |
 
 ### 3.5 Maintainability
 
@@ -214,10 +219,10 @@ The system crawls product pages, extracts structured data, stores it in a search
 | ID | Requirement | Target | Priority |
 |----|-------------|--------|----------|
 | NFR-7.1 | MVP infrastructure cost | < $500/month | High |
-| NFR-7.2 | Single region cost at 10% load | ~$33K/month | Medium |
-| NFR-7.3 | Single region cost at 100% load | ~$144K/month | Medium |
-| NFR-7.4 | Cost reduction via auto-scaling | ~40% vs fixed capacity | Medium |
-| NFR-7.5 | 4-region global deployment cost (100% load) | ~$575K/month | Low |
+| NFR-7.2 | Single region cost at 10% load | ~$110K/month | Medium |
+| NFR-7.3 | Single region cost at 100% load | ~$194K/month | Medium |
+| NFR-7.4 | Cost reduction via auto-scaling | ~29% vs fixed capacity | Medium |
+| NFR-7.5 | 4-region global deployment cost (100% load) | ~$775K/month | Low |
 | NFR-7.6 | Storage lifecycle policy | Delete HTML after 90 days | Medium |
 
 ### 3.8 Data Freshness
@@ -260,9 +265,10 @@ The system crawls product pages, extracts structured data, stores it in a search
 | NFR-11.1 | Python 3.13+ as primary language | High |
 | NFR-11.2 | Docker Compose for MVP deployment | High |
 | NFR-11.3 | Kubernetes for production/scale deployment | Medium |
-| NFR-11.4 | PostgreSQL for ACID compliance | High |
+| NFR-11.4 | PostgreSQL for ACID compliance and operational queries | High |
 | NFR-11.5 | Elasticsearch for full-text search capabilities | High |
-| NFR-11.6 | RabbitMQ for reliable message queuing | High |
+| NFR-11.6 | ClickHouse for analytics and historical queries (at scale) | Medium |
+| NFR-11.7 | RabbitMQ for reliable message queuing | High |
 
 ---
 

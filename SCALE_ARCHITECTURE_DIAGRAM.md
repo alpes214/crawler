@@ -71,7 +71,7 @@ Global Totals:
 ├─ Peak Message Rate: 10,320 msg/second (3x burst)
 ├─ Total Workers: 400 (100 per region)
 ├─ Total API Capacity: 40M queries/second (4 regions × 10M)
-└─ Monthly Cost: ~$576,000 (4 regions × $144,000)
+└─ Monthly Cost: ~$775,000 (4 regions × $194,000)
 ```
 
 ---
@@ -143,28 +143,33 @@ Each region is independent and identical. This shows the detailed architecture f
                                               │
                                               │ Data sync
                                               ▼
-                                    ┌──────────────────────┐
-                                    │  Elasticsearch       │
-                                    │  Cluster             │
-                                    │                      │
-                                    │ Topology:            │
-                                    │ - Master nodes: 3    │
-                                    │ - Data nodes: 7      │
-                                    │                      │
-                                    │ Per data node:       │
-                                    │ - 16 CPU             │
-                                    │ - 64GB RAM           │
-                                    │ - 5TB SSD            │
-                                    │                      │
-                                    │ Total:               │
-                                    │ - Storage: 35TB      │
-                                    │ - Index: 100K doc/s  │
-                                    │ - Search: 50K qry/s  │
-                                    └──────────────────────┘
-                                              ▲
-                                              │
-                                              │ Index products
-                                              │
+                    ┌─────────────────────┐        ┌──────────────────────┐
+                    │  Elasticsearch      │        │   ClickHouse         │
+                    │  Cluster            │        │   Cluster (Analytics)│
+                    │                     │        │                      │
+                    │ Topology:           │        │ Cluster:             │
+                    │ - Master nodes: 3   │        │ - Nodes: 10-15       │
+                    │ - Data nodes: 17    │        │                      │
+                    │                     │        │ Per node:            │
+                    │ Per data node:      │        │ - 16 CPU             │
+                    │ - 16 CPU            │        │ - 128GB RAM          │
+                    │ - 64GB RAM          │        │ - 10TB SSD           │
+                    │ - 5TB SSD           │        │                      │
+                    │                     │        │ Query Types:         │
+                    │ Total:              │        │ - Price history      │
+                    │ - Storage: 85TB     │        │ - Trends             │
+                    │ - Index: 100K doc/s │        │ - Comparisons        │
+                    │ - Search: 85K qry/s │        │ - Aggregations       │
+                    │ (with 97% caching)  │        │                      │
+                    │                     │        │ Load: 4.4M qps       │
+                    │ Query Types:        │        │ Utilization: 44%     │
+                    │ - Full-text search  │        └──────────────────────┘
+                    │ - Keywords          │                   ▲
+                    │ - Product discovery │                   │
+                    └─────────────────────┘                   │ ETL (periodic)
+                                ▲                             │
+                                │ Index products              │
+                                └─────────────────────────────┘
 ┌─────────────────────────────────────────────┴───────────────────────────────┐
 │                                                                             │
 │                    RabbitMQ 3-Node Cluster + Celery Workers                 │
@@ -254,15 +259,17 @@ Each region is independent and identical. This shows the detailed architecture f
 Regional Metrics:
 ├─ Crawl Rate: 385.8 pages/second
 ├─ Message Rate: 860 msg/second sustained
-├─ Peak Message Rate: 2,571 msg/second (3x)
+├─ Peak Message Rate: 2,580 msg/second (3x)
 ├─ Burst Message Rate: 10,000 msg/second (batch uploads)
-├─ Workers: 110 total (50 crawler + 50 parser + 10 priority)
+├─ Workers: 100 total (50 crawler + 50 parser)
+├─ Priority Workers: 10 (separate high-priority queue)
 ├─ API Capacity: 10M queries/second (1,000 pods × 10K qps)
 ├─ Cache Hit Rate: 85-90%
 ├─ Database Write: 50K inserts/second capacity
-├─ Database Read: 500K queries/second capacity
-├─ Elasticsearch: 100K docs/second indexing, 50K queries/second
-└─ Monthly Cost: ~$144,000 per region
+├─ Database Read: 500K queries/second capacity (1 primary + 2-10 replicas)
+├─ Elasticsearch: 100K docs/second indexing, 85K search qps (with 97% caching)
+├─ ClickHouse: 4.4M analytics queries/second at 44% utilization
+└─ Monthly Cost: ~$174,000 per region
 ```
 
 ---
@@ -377,8 +384,9 @@ User → API (POST /api/products/search {"query": "wireless headphones"})
 | **API Pods (1,000 × 2 CPU)** | $72,000 | K8s managed nodes |
 | **RabbitMQ Cluster (3 nodes)** | $3,600 | 8 CPU, 16GB RAM each |
 | **Redis Cache (20 nodes)** | $8,000 | 64GB RAM per node |
-| **PostgreSQL Cluster** | $15,000 | Primary + 10 replicas |
-| **Elasticsearch (10 nodes)** | $20,000 | 16 CPU, 64GB, 5TB SSD |
+| **PostgreSQL Cluster** | $15,000 | Primary + 2-10 replicas |
+| **Elasticsearch (20 nodes)** | $40,000 | 16 CPU, 64GB, 5TB SSD each |
+| **ClickHouse (10-15 nodes)** | $30,000 | 16 CPU, 128GB, 10TB SSD each |
 | **Crawler Workers (50)** | $1,800 | 1 CPU, 2Gi RAM each |
 | **Parser Workers (50)** | $1,800 | 1 CPU, 2Gi RAM each |
 | **Priority Workers (10)** | $360 | 1 CPU, 2Gi RAM each |
@@ -387,14 +395,14 @@ User → API (POST /api/products/search {"query": "wireless headphones"})
 | **Load Balancers** | $2,000 | ALB + NLB |
 | **Monitoring** | $3,000 | Prometheus, Grafana, logs |
 | **K8s Control Plane** | $5,000 | Managed Kubernetes |
-| **Total per region** | **$143,710** | |
+| **Total per region** | **$193,710** | |
 
-**4 Regions Total**: **$574,840/month**
+**4 Regions Total**: **$774,840/month**
 
 Plus global services:
 - CDN (CloudFlare): $10,000/month
 - GeoDNS (Route53): $1,000/month
 
-**Grand Total**: **$585,840/month**
+**Grand Total**: **$785,840/month**
 
 ---
