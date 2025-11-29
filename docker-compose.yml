@@ -1,0 +1,162 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: crawler_postgres
+    environment:
+      POSTGRES_DB: crawler
+      POSTGRES_USER: crawler
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - crawler_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crawler"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  elasticsearch:
+    image: elasticsearch:8.11.0
+    container_name: crawler_elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - crawler_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: crawler_rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: crawler
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - crawler_network
+    healthcheck:
+      test: ["CMD-SHELL", "rabbitmq-diagnostics -q ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crawler_api
+    command: uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+    environment:
+      DATABASE_URL: postgresql://crawler:${POSTGRES_PASSWORD}@postgres:5432/crawler
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      RABBITMQ_URL: amqp://crawler:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      PYTHONPATH: /app
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - storage_data:/app/storage
+    networks:
+      - crawler_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  celery-scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: crawler_celery_beat
+    command: celery -A src.core.celery_app beat --loglevel=info
+    environment:
+      DATABASE_URL: postgresql://crawler:${POSTGRES_PASSWORD}@postgres:5432/crawler
+      RABBITMQ_URL: amqp://crawler:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+    networks:
+      - crawler_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  celery-crawler:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A src.core.celery_app worker -Q crawl_queue,priority_queue --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql://crawler:${POSTGRES_PASSWORD}@postgres:5432/crawler
+      RABBITMQ_URL: amqp://crawler:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+      - storage_data:/app/storage
+    networks:
+      - crawler_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      replicas: 5
+
+  celery-parser:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: celery -A src.core.celery_app worker -Q parse_queue --loglevel=info --concurrency=4
+    environment:
+      DATABASE_URL: postgresql://crawler:${POSTGRES_PASSWORD}@postgres:5432/crawler
+      ELASTICSEARCH_URL: http://elasticsearch:9200
+      RABBITMQ_URL: amqp://crawler:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      PYTHONPATH: /app
+    volumes:
+      - .:/app
+      - storage_data:/app/storage
+    networks:
+      - crawler_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    deploy:
+      replicas: 5
+
+networks:
+  crawler_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  elasticsearch_data:
+  rabbitmq_data:
+  storage_data:
