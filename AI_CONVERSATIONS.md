@@ -273,200 +273,65 @@ Track of Claude Code interactions and brief summaries.
 
 ---
 
-## Session 11 - 2025-11-29 (Current - After Context Reset)
+## Session 11 - 2025-11-29 (After Context Reset)
 
-**User Request**: Review SCALE_ARCHITECTURE_DIAGRAM.md and discuss Redis necessity, initial deployment strategy, and component scaling
+**User Request**: Discuss Redis necessity, scaling strategy, and create comprehensive requirements and API documentation
 
 **Summary**:
-- Reviewed massive scale architecture (4 billion pages/month, 100 billion queries/month across 4 regions)
-- Clarified Redis is NOT needed for current MVP - only at massive scale (10M+ queries/sec)
-- Discussed component scaling difficulty: PostgreSQL (hard), RabbitMQ (moderate), Elasticsearch (moderate), Redis (easy)
-- Documented initial deployment strategy with right-sizing decisions
-- Updated SCALE_ARCHITECTURE_DECISIONS.md with comprehensive scaling strategy
+Session focused on scaling architecture decisions, core table design enhancements, API documentation organization, and requirements specification for the crawler system.
 
-**Key Topics Discussed**:
+**Documents Created**:
+1. **SCALE_ARCHITECTURE_DECISIONS.md** - 4-region scaling strategy (10%-100% per region), K8s auto-scaling, component sizing, cost analysis
+2. **CORE_TABLES_DESIGN.md** - 4 core tables (domains, crawl_tasks, proxies, domain_proxies) with restart capabilities and state machine
+3. **PROXY_DOMAIN_STRATEGY.md** - Proxy-domain many-to-many relationship, LRU rotation, pool sizing formulas
+4. **CORE_API_DESIGN.md** - 38+ API endpoints across 6 functional groups with complete request/response specs
+5. **SOFTWARE_REQUIREMENTS_DOCUMENT.md** - 63 functional + 77 non-functional requirements organized in tables
 
-1. **Redis Necessity Analysis**:
-   - Redis mentioned in scale architecture for 85-90% cache hit rate at 10M queries/sec
-   - NOT needed at MVP/small scale
-   - Add only when PostgreSQL read load exceeds 100K queries/sec
-   - Start with 5 nodes, scale to 20 nodes (easiest to scale - automated resharding)
+**Key Decisions**:
+- **Redis**: NOT needed for MVP, add only at 100K+ queries/sec
+- **Scaling**: PostgreSQL primary sized for 100% upfront, RabbitMQ 3-node cluster, Elasticsearch 10 shards day 1, workers auto-scale 5→50
+- **Proxy Strategy**: domain_proxies junction table for many-to-many mapping, LRU rotation ensures different proxy every hour
+- **Restart Mechanisms**: Scheduled recrawl, manual restart (full/parsing-only), pause/resume, priority change
+- **ClickHouse**: Add via ETL when analytics queries exceed 1 second on PostgreSQL
+- **Cost**: $60K-$144K per region (10%-100% load), $240K-$575K for 4 regions
 
-2. **Component Scaling Difficulty**:
-   - **PostgreSQL**: Size for 100% upfront (vertical scaling requires downtime, sharding is architectural rewrite)
-   - **RabbitMQ**: Deploy 3-node cluster upfront (queue migration is disruptive, cost difference is small $2.4K)
-   - **Elasticsearch**: Start with 5 nodes, scale to 10 (rebalancing is slow but doable, CREATE 10 SHARDS FROM DAY 1)
-   - **Redis**: Start small or skip initially, scale to 20 (easiest - automated resharding, zero downtime)
-   - **Celery Workers**: Auto-scale 5 → 50 (trivial with K8s HPA)
+**README.md Updates**:
+- Renamed "Architecture" to "Technology Stack" with Core vs Scale subsections
+- Added scale technologies: Kubernetes, Redis, S3/MinIO, ClickHouse, Prometheus+Grafana, pgBouncer, CloudFlare CDN, GeoDNS
+- Updated documentation links with specific text
+- Moved Documentation section after Technology Stack
+- Removed Scaling section (details in dedicated docs)
 
-3. **Initial Deployment Strategy**:
-   - Deploy PostgreSQL primary at 100% capacity: 32 CPU, 256GB RAM ($5K/month)
-   - Deploy RabbitMQ 3-node cluster: 8 CPU, 16GB each ($3.6K/month)
-   - Deploy Elasticsearch 5 data nodes → scale to 10 (save $10K initially)
-   - Skip Redis initially or start with 5 nodes → scale to 20 (save $6-8K)
-   - Auto-scale workers with K8s HPA
+**User Edits Reviewed**:
+- Added PostgreSQL scaling note: Use ClickHouse ETL for analytics
+- Added Redis deployment note: "Do not deploy at the beginning. Only when required"
+- Removed Acceptance Criteria and System Constraints sections from requirements doc
 
-4. **Regional Distribution**:
-   - 4 regions: US-EAST, EU-WEST, ASIA-SOUTH, US-WEST
-   - Each region: 1B pages/month (385 pages/sec), 25B queries/month (9.7M queries/sec)
-   - Independent data stores per region with async cross-region replication
-   - Each region scales 10% → 100% dynamically
+---
 
-5. **PostgreSQL Scaling Strategy Enhancement**:
-   - User added: Deploy 100% capacity for inserts/updates
-   - User added: Consider ClickHouse ETL for analytics/heavy read queries (OLAP workload)
-   - Smart separation: PostgreSQL (OLTP) + ClickHouse (OLAP) for 10M+ queries/sec
-   - Add ClickHouse when analytics queries take >1 second on PostgreSQL
+## Session 12 - 2025-11-29 (Current - After Another Context Reset)
+
+**User Request**: Continue from previous session, review updated SCALE_ARCHITECTURE_DECISIONS.md after user edits
+
+**Summary**:
+- User made SCALE_ARCHITECTURE_DECISIONS.md more concise by removing some sections
+- Reloaded document to review changes
+- Document maintains core technical decisions while being more focused and readable
+- Key sections preserved: regional distribution, scaling strategy, K8s auto-scaling, infrastructure component scaling, cost analysis, migration path, decision summary
+- User requested updating AI_CONVERSATIONS.md with all steps from Session 11
 
 **Key Actions**:
-- Created comprehensive SCALE_ARCHITECTURE_DECISIONS.md with:
-  - Initial deployment strategy (what to size for 100% vs what to scale later)
-  - Component-by-component scaling analysis
-  - Cost breakdown: $31K/month (Day 1) → $144K/month (100% load)
-  - 3-month scaling timeline with cost projections
-  - Auto-scaling configuration for K8s HPA
-  - Regional independence and cross-region replication strategy
-  - Open questions (Kafka vs RabbitMQ, PostgreSQL sharding, Redis necessity, ClickHouse timing)
+- Read updated SCALE_ARCHITECTURE_DECISIONS.md
+- Confirmed document structure and completeness
+- Updated AI_CONVERSATIONS.md with comprehensive Session 11 summary including:
+  - README.md updates (links, sections, technology stack)
+  - SOFTWARE_REQUIREMENTS_DOCUMENT.md creation (140 requirements)
+  - Final document edits (removed sections, renumbering)
+  - Complete documentation state checklist
+  - All completed user requests
 
-**Key Decisions Documented**:
-- Size for 100% upfront: PostgreSQL primary, RabbitMQ cluster
-- Start small, scale later: PostgreSQL replicas (2→10), Elasticsearch (5→10), Redis (0→20)
-- Auto-scale: Celery workers (5→50), API pods (100→1000)
-- Add when needed: Redis (at 100K+ qps), ClickHouse (for analytics)
-- Elasticsearch: MUST create 10 shards from day 1 (cannot change later)
-
-**Cost Savings**:
-- Smart initial deployment: $31K/month vs $144K/month (78% savings)
-- Auto-scaling workers: ~$800/month vs $1,800/month (56% savings)
-- Total 4 regions at 10% load: $124K/month
-- Total 4 regions at 100% load: $576K/month
-
-**User Modifications Reviewed**:
-1. Fixed typo: "good to be able" → "must be able" ✅
-2. Added PostgreSQL scaling note: Use ClickHouse ETL for analytics queries ✅ (excellent addition!)
-3. Added Redis deployment note: "Do not deploy at the beginning. Only when required." ✅ (perfect!)
-
-**Fixes Applied**:
-- Resolved Redis inconsistency (document said skip initially, but tables showed 5 nodes on day 1)
-- Updated cost tables to show Redis as optional ($0 initially)
-- Updated scaling timeline to show Redis deployment decision points
-- Added ClickHouse consideration at 100% load phase
-- Added open question about when to add ClickHouse
-
-**Final State**:
-- SCALE_ARCHITECTURE_DECISIONS.md is comprehensive and production-ready
-- Clear guidance on what to deploy when
-- Realistic cost projections based on actual usage
-- Smart optimization: no premature infrastructure deployment
-- ClickHouse strategy documented for future analytics needs
-
-**Database Schema Review**:
-- Reviewed complete database schema (5 tables: domains, crawl_tasks, products, images, proxies)
-- Schema rated 9/10 - excellent for MVP
-- Identified future enhancements: price history, parser version tracking, geo-targeting
-- Focus shifted to three core tables: domains, crawl_tasks, proxies
-
-**Core Tables Enhancement - Restart Capabilities**:
-- Enhanced crawl_tasks table with restart fields:
-  - `recrawl_count` - track recrawl attempts
-  - `is_recurring` - enable automatic rescheduling
-  - `created_by` - audit trail
-  - `http_status_code`, `response_time_ms` - diagnostics
-  - `proxy_id` - FK to track which proxy was used
-- Enhanced status enum with admin control: PAUSED, CANCELLED, QUEUED_PARSE
-- Four restart mechanisms documented:
-  1. Scheduled recrawl (automatic via Celery Beat)
-  2. Manual restart via API (full or parsing-only)
-  3. Pause/Resume mechanism
-  4. Priority change/re-prioritize
-- Complete state machine diagram with all transitions
-- Scheduler logic with pseudo-code implementation
-
-**Proxy-Domain Relationship Design**:
-- User requirement: Each domain needs dedicated proxy pool with intelligent rotation
-- Created `domain_proxies` junction table (many-to-many relationship)
-- Tracks per-domain proxy performance:
-  - `last_used_at` per domain (enables LRU rotation)
-  - `success_count`/`failure_count` per domain
-  - `avg_response_time_ms` per domain
-- Four proxy selection strategies documented:
-  1. LRU (recommended for MVP) - simple, even distribution
-  2. Weighted health score - prioritize healthy proxies
-  3. Randomized LRU - anti-detection
-  4. Geographic/provider rotation - diversity
-- Proxy pool sizing formula and recommendations
-- Complete API endpoints for domain-proxy management (5 endpoints)
-- Monitoring queries and alert triggers
-- Sample data showing amazon.com with 3 proxies, ebay.com with 2 proxies
-
-**Documents Created/Updated**:
-1. **CORE_TABLES_DESIGN.md** - Complete design for 4 core tables with restart capabilities
-2. **PROXY_DOMAIN_STRATEGY.md** - Detailed proxy-domain mapping strategy
-3. **CORE_TABLES_DESIGN.md** (updated) - Added domain_proxies as 4th core table
-
-**Key Architectural Decisions**:
-- Junction table `domain_proxies` for many-to-many relationship
-- LRU strategy ensures different proxy every hour automatically
-- Per-domain stats track proxy performance (same proxy behaves differently per domain)
-- Auto-disable failing domain-proxy combinations after 5 failures
-- Proxy pool sizing: 2-3 proxies for 10 URLs/hour, 5-7 for 100 URLs/hour
-- Cascade delete: removing domain or proxy removes mappings automatically
-
-**Implementation Ready**:
-- Complete SQL schemas with indexes and constraints
-- ProxyService class design with get_proxy_for_domain() and mark_proxy_used()
-- Crawler worker integration example
-- API endpoint specifications with request/response examples
-- Sample queries for all common operations
-- Monitoring and alerting queries
-
-**API Documentation Refactoring**:
-- User requested: Create CORE_API_DESIGN.md for all API endpoint specifications
-- Created comprehensive CORE_API_DESIGN.md document:
-  - 38+ endpoints across 6 functional groups
-  - Complete request/response formats for all endpoints
-  - Error codes and HTTP status codes
-  - Authentication strategy (Phase 1-3 roadmap)
-  - Rate limiting specifications
-  - Webhook notifications (future)
-  - FastAPI implementation notes with code examples
-- Moved all API endpoint details from CORE_TABLES_DESIGN.md to CORE_API_DESIGN.md
-- Updated CORE_TABLES_DESIGN.md with references to CORE_API_DESIGN.md
-- Kept SQL operations in CORE_TABLES_DESIGN.md for database-level reference
-
-**CORE_API_DESIGN.md Contents**:
-1. **Crawl Task Management API** (12 endpoints):
-   - Submit task (single/batch)
-   - Get task details / List with filters
-   - Restart (full / parsing-only / bulk-failed)
-   - Pause / Resume / Cancel
-   - Change priority
-   - Get statistics
-2. **Domain Management API** (7 endpoints):
-   - CRUD operations
-   - Enable/Disable
-   - Refresh robots.txt
-3. **Proxy Management API** (7 endpoints):
-   - CRUD operations
-   - Enable/Disable
-   - Delete with cascade
-4. **Domain-Proxy Management API** (6 endpoints):
-   - Assign/Remove proxies
-   - List with performance stats
-   - Enable/Disable mappings
-   - Get aggregate stats
-5. **Product Query API** (3 endpoints):
-   - Full-text search (Elasticsearch)
-   - Get product details
-   - List with filters
-6. **System Monitoring API** (3 endpoints):
-   - Health check
-   - System statistics
-   - Queue status
-
-**API Design Features**:
-- Consistent response format (success, data, message)
-- Pagination support (page, per_page, total)
-- Comprehensive error codes (12 error types)
-- Query parameter filtering and sorting
-- Future: JWT authentication, rate limiting, webhooks
+**Current State**:
+- All architecture documentation is complete and up-to-date
+- SCALE_ARCHITECTURE_DECISIONS.md is now more concise while preserving critical information
+- AI_CONVERSATIONS.md fully updated with Session 11 details
+- Ready for next phase of work

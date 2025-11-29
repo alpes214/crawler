@@ -7,18 +7,36 @@ A scalable web crawler system for extracting product information from e-commerce
 - **Distributed Crawling**: Async crawlers with proxy rotation
 - **Intelligent Parsing**: Site-specific parsers for accurate data extraction
 - **Task Management**: Celery-based distributed task queue with priority support
-- **Full-Text Search**: Elasticsearch integration for product descriptions
+- **Full-Text Search**: Elasticsearch integration for full text search and further text processing (at the moment only for product description)
 - **Admin API**: REST API for managing crawl jobs and monitoring progress
 - **Query API**: REST API for filtering and searching products
 
-## Architecture
+## Technology Stack
 
+### Core Technologies
 - **FastAPI**: Web framework for REST APIs
 - **PostgreSQL**: Primary database for structured data
 - **Elasticsearch**: Full-text search engine
 - **RabbitMQ + Celery**: Distributed task queue
 - **aiohttp**: Async HTTP client for crawling
-- **Docker Compose**: Container orchestration
+- **Docker Compose**: Container orchestration (MVP)
+
+### Scale & Production Technologies
+- **Kubernetes**: Container orchestration at scale
+- **Redis**: Caching layer for high-traffic API queries
+- **S3/MinIO**: Distributed object storage for HTML/images
+- **ClickHouse**: Columnar database for analytics queries
+- **Prometheus + Grafana**: Monitoring and metrics visualization
+- **pgBouncer**: PostgreSQL connection pooling
+- **CloudFlare CDN**: Global edge caching and DDoS protection
+- **GeoDNS (Route53/NS1)**: Geographic traffic routing for multi-region deployments
+
+## Documentation
+
+- [Software Requirements Document](SOFTWARE_REQUIREMENTS_DOCUMENT.md)
+- [Overall Architecture (Big scale)](SCALE_ARCHITECTURE_DECISIONS.md)
+- [Single region architecture diagram](ARCHITECTURE_DECISIONS.md)
+- [API Documentation](http://localhost:8000/docs) (when running)
 
 ## Project Structure
 
@@ -156,28 +174,6 @@ Key settings:
 - `RABBITMQ_URL`: RabbitMQ connection string
 - `MAX_RETRIES`: Retry attempts for failed crawls
 - `REQUEST_TIMEOUT`: HTTP request timeout in seconds
-
-## Scaling
-
-### Scale workers
-
-```bash
-# Scale crawler workers
-docker-compose up -d --scale celery-crawler=10
-
-# Scale parser workers
-docker-compose up -d --scale celery-parser=10
-```
-
-### Monitor queues
-
-Access RabbitMQ management UI at http://localhost:15672
-
-## Documentation
-
-- [Architecture Decisions](ARCHITECTURE_DECISIONS.md)
-- [Architecture Diagram](ARCHITECTURE_DIAGRAM.md)
-- [API Documentation](http://localhost:8000/docs) (when running)
 
 ## License
 
