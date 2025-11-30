@@ -30,14 +30,14 @@
     Write (crawl_tasks)            Read (products)
          │                              │
          ▼                              ▼
-┌─────────────────────┐        ┌─────────────────────┐
-│                     │        │                     │
-│    PostgreSQL       │        │   Elasticsearch     │
-│  (Source of Truth)  │        │  (Full-Text Search) │
-│                     │        │                     │
-│  Tables:            │        │  Indexes:           │
-│  - domains          │        │  - products         │
-│  - crawl_tasks      │        │                     │
+┌─────────────────────┐        ┌─────────────────────┐        ┌──────────────────┐
+│                     │        │                     │        │  Redis Cache     │
+│    PostgreSQL       │───────▶│   Elasticsearch     │        │  (Stage 2+)      │
+│  (Source of Truth)  │        │  (Full-Text Search) │        │                  │
+│                     │        │                     │        │ Operational      │
+│  Tables:            │        │  Indexes:           │        │ query cache      │
+│  - domains          │        │  - products         │        │ 90% hit rate     │
+│  - crawl_tasks      │        │                     │        └──────────────────┘
 │  - products         │        └─────────────────────┘
 │  - images           │                   ▲
 │  - proxies          │                   │
@@ -45,7 +45,23 @@
 └──────┬──────────────┘                   │
        │                                  │
        │ Read pending tasks               │
-       ▼                                  │
+       │                                  │
+       │        ┌─────────────────────────┴──────────┐
+       │        │                                    │
+       │        │                                    │
+       ▼        ▼                                    ▼
+              ┌──────────────────┐        ┌──────────────────┐
+              │  ClickHouse      │        │  ML Ranking      │
+              │  (Stage 2+)      │        │  Service         │
+              │                  │        │  (Stage 2+)      │
+              │ Analytics:       │        │                  │
+              │ - Price history  │        │ Reranks search   │
+              │ - Trends         │        │ results via ML   │
+              │ - ML features    │        │ (LightGBM)       │
+              └──────────────────┘        └──────────────────┘
+                     ▲
+                     │ ETL (periodic)
+                     │
 ┌─────────────────────────────────────────┴───────────────────────────────────┐
 │                                                                             │
 │                         RabbitMQ + Celery                                   │
@@ -179,6 +195,30 @@
   - Crawler writes: `{task_id}/page.html`, `{task_id}/images/*`
   - Parser reads: `{task_id}/page.html`
   - Cleanup: Delete after successful parse
+
+### 10. **Redis Cache (Stage 2+)**
+- **Role**: Cache layer for operational queries
+- **Operations**:
+  - Cache product lookups, domain configs
+  - 90% hit rate target
+  - LRU eviction for hot data
+
+### 11. **ClickHouse (Stage 2+)**
+- **Role**: Analytics database and ML feature storage
+- **Operations**:
+  - Analytics queries: price history, trends, comparisons
+  - Precomputed ML features (Stage 3)
+  - ETL from PostgreSQL (periodic sync)
+  - Columnar storage for fast batch retrieval
+
+### 12. **ML Ranking Service (Stage 2+)**
+- **Role**: Machine learning-based search result ranking
+- **Operations**:
+  - Receives top-N candidates from Elasticsearch (500-1000)
+  - Fetches features from ClickHouse
+  - Ranks via LightGBM/XGBoost model
+  - Returns top-K results (20-100)
+  - Latency: 160-505ms
 
 ---
 
@@ -350,6 +390,7 @@
 
 ### Flow 6: User Searches Products (Full-Text)
 
+**Stage 1 (MVP - Direct Search):**
 ```
 ┌──────┐   1. POST /api/products/search      ┌─────────┐
 │ User │   {"query": "wireless headphones"}  │ FastAPI │
@@ -364,14 +405,14 @@
                                             │ Return IDs   │
                                             └──────┬───────┘
                                                    │
-                                                   │ 3. Product IDs: [101, 205, 308]
+                                                   │ 3. Product IDs: [101, 205, 308, ...]
                                                    ▼
                                             ┌─────────┐
                                             │ FastAPI │
                                             └────┬────┘
                                                  │
                                                  │ 4. SELECT * FROM products
-                                                 │    WHERE id IN (101, 205, 308)
+                                                 │    WHERE id IN (...)
                                                  ▼
                                             ┌──────────────┐
                                             │  PostgreSQL  │
@@ -384,6 +425,67 @@
                                             └────┬────┘
                                                  │
                                                  │ 6. JSON response
+                                                 ▼
+                                            ┌──────┐
+                                            │ User │
+                                            └──────┘
+```
+
+**Stage 2/3 (With ML Ranking):**
+```
+┌──────┐   1. POST /api/products/search      ┌─────────┐
+│ User │   {"query": "wireless headphones"}  │ FastAPI │
+└──────┘───────────────────────────────────►└────┬────┘
+                                                  │
+                                                  │ 2. SEARCH description
+                                                  │    Top-N=1000 candidates
+                                                  ▼
+                                            ┌──────────────┐
+                                            │Elasticsearch │
+                                            │              │
+                                            │ Return 1000  │
+                                            │ candidates   │
+                                            └──────┬───────┘
+                                                   │
+                                                   │ 3. Candidate IDs + BM25 scores
+                                                   ▼
+                                            ┌─────────┐
+                                            │ FastAPI │
+                                            └────┬────┘
+                                                 │
+                                                 │ 4. Send to ML Ranking Service
+                                                 ▼
+                                            ┌──────────────────┐
+                                            │  ML Ranking      │
+                                            │  Service         │
+                                            │                  │
+                                            │ - Fetch features │◄────┐
+                                            │   from ClickHouse│     │
+                                            │ - Rank via ML    │     │
+                                            │ - Return top-20  │     │
+                                            └────┬─────────────┘     │
+                                                 │                   │
+                                                 │ 5. Top-20 ranked  │
+                                                 │    product IDs    │
+                                                 ▼                   │
+                                            ┌─────────┐        ┌──────────────┐
+                                            │ FastAPI │        │  ClickHouse  │
+                                            └────┬────┘        │  (features)  │
+                                                 │             └──────────────┘
+                                                 │ 6. SELECT * FROM products
+                                                 │    WHERE id IN (top-20)
+                                                 ▼
+                                            ┌──────────────┐
+                                            │  PostgreSQL  │
+                                            └──────┬───────┘
+                                                   │
+                                                   │ 7. Return full product data
+                                                   ▼
+                                            ┌─────────┐
+                                            │ FastAPI │
+                                            └────┬────┘
+                                                 │
+                                                 │ 8. JSON response (ML-ranked)
                                                  ▼
                                             ┌──────┐
                                             │ User │
@@ -503,6 +605,24 @@ Elasticsearch:
 - Index size
 - Search latency
 - Indexing rate
+
+Redis (Stage 2+):
+- Hit rate
+- Memory usage
+- Evictions
+- Connection count
+
+ClickHouse (Stage 2+):
+- Query latency
+- Storage size
+- ETL pipeline lag
+- Analytics qps
+
+ML Ranking Service (Stage 2+):
+- Inference latency (p50, p95, p99)
+- Throughput (candidates/sec)
+- Model version
+- Feature fetch time
 
 Workers:
 - Active workers count

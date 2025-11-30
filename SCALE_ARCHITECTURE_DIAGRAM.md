@@ -117,29 +117,30 @@ Each region is independent and identical. This shows the detailed architecture f
                    │                │                │
                    └────────────────┼────────────────┘
                                     │
-                    ┌───────────────┴──────────────┐
-                    │                              │
-                    ▼                              ▼
-        ┌───────────────────────┐      ┌──────────────────────┐
-        │   Redis Cache Cluster │      │  PostgreSQL Cluster  │
-        │                       │      │                      │
-        │ Nodes: 20             │      │ Primary (Write):     │
-        │ Memory/node: 64GB     │      │ - 32 CPU             │
-        │ Total: 1.28TB         │      │ - 256GB RAM          │
-        │                       │      │ - 10TB SSD           │
-        │ Cache Strategy:       │      │                      │
-        │ - Hot: 100% hit       │      │ Read Replicas: 10    │
-        │ - Warm: 80% hit       │      │ - 16 CPU each        │
-        │ - Cold: DB read       │      │ - 128GB RAM each     │
-        │                       │      │                      │
-        │ Expected: 85-90%      │      │ Connection Pool:     │
-        │ cache hit rate        │      │ - pgBouncer × 5      │
-        │                       │      │ - 10K max conn       │
-        └───────────────────────┘      │                      │
-                                       │ Capacity:            │
-                                       │ - Write: 50K/sec     │
-                                       │ - Read: 500K/sec     │
-                                       └──────┬───────────────┘
+                    ┌───────────────┴──────────────┬──────────────────┐
+                    │                              │                  │
+                    ▼                              ▼                  ▼
+        ┌───────────────────────┐      ┌──────────────────────┐  ┌─────────────────┐
+        │  ML Ranking Service   │      │   Redis Cache        │  │  PostgreSQL     │
+        │                       │      │   Cluster            │  │  Cluster        │
+        │ K8s Deploy: 10-50     │      │                      │  │                 │
+        │ Resources:            │      │ Nodes: 20            │  │ Primary (Write):│
+        │ - 2 CPU, 4Gi RAM      │      │ Memory/node: 64GB    │  │ - 32 CPU        │
+        │                       │      │ Total: 1.28TB        │  │ - 256GB RAM     │
+        │ Purpose:              │      │                      │  │ - 10TB SSD      │
+        │ - Rerank search       │      │ Cache Strategy:      │  │                 │
+        │   results via ML      │      │ - Hot: 100% hit      │  │ Read Replicas:10│
+        │ - 1000 candidates     │      │ - Warm: 80% hit      │  │ - 16 CPU each   │
+        │   → top 20 results    │      │ - Cold: DB read      │  │ - 128GB RAM each│
+        │ - Latency: 160-505ms  │      │                      │  │                 │
+        │                       │      │ Expected: 85-90%     │  │ Connection Pool:│
+        │ Fetches features:     │      │ cache hit rate       │  │ - pgBouncer × 5 │
+        │ - ClickHouse          │      └──────────────────────┘  │ - 10K max conn  │
+        │ - Elasticsearch       │                                │                 │
+        └───────────────────────┘                                │ Capacity:       │
+                                                                 │ - Write: 50K/sec│
+                                                                 │ - Read: 500K/sec│
+                                                                 └──────┬──────────┘
                                               │
                                               │ Data sync
                                               ▼
@@ -264,12 +265,13 @@ Regional Metrics:
 ├─ Workers: 100 total (50 crawler + 50 parser)
 ├─ Priority Workers: 10 (separate high-priority queue)
 ├─ API Capacity: 10M queries/second (1,000 pods × 10K qps)
+├─ ML Ranking: Reranks 1000→20 search results (10-50 pods, 2 CPU each, 160-505ms latency)
 ├─ Cache Hit Rate: 85-90%
 ├─ Database Write: 50K inserts/second capacity
 ├─ Database Read: 500K queries/second capacity (1 primary + 2-10 replicas)
 ├─ Elasticsearch: 100K docs/second indexing, 85K search qps (with 97% caching)
 ├─ ClickHouse: 4.4M analytics queries/second at 44% utilization
-└─ Monthly Cost: ~$193,710 per region
+└─ Monthly Cost: ~$197,310 per region
 ```
 
 ---
@@ -382,6 +384,7 @@ User → API (POST /api/products/search {"query": "wireless headphones"})
 | Component | Monthly Cost | Notes |
 |-----------|-------------|-------|
 | **API Pods (1,000 × 2 CPU)** | $72,000 | K8s managed nodes |
+| **ML Ranking Service (20-50 pods)** | $1,440 - $3,600 | 2 CPU, 4Gi RAM each |
 | **RabbitMQ Cluster (3 nodes)** | $3,600 | 8 CPU, 16GB RAM each |
 | **Redis Cache (20 nodes)** | $8,000 | 64GB RAM per node |
 | **PostgreSQL Cluster** | $15,000 | Primary + 2-10 replicas |
@@ -395,14 +398,14 @@ User → API (POST /api/products/search {"query": "wireless headphones"})
 | **Load Balancers** | $2,000 | ALB + NLB |
 | **Monitoring** | $3,000 | Prometheus, Grafana, logs |
 | **K8s Control Plane** | $5,000 | Managed Kubernetes |
-| **Total per region** | **$193,710** | |
+| **Total per region** | **$195,150 - $197,310** | |
 
-**4 Regions Total**: **$774,840/month**
+**4 Regions Total**: **$780,600 - $789,240/month**
 
 Plus global services:
 - CDN (CloudFlare): $10,000/month
 - GeoDNS (Route53): $1,000/month
 
-**Grand Total**: **$785,840/month**
+**Grand Total**: **$791,600 - $800,240/month**
 
 ---

@@ -1,12 +1,22 @@
-# Core Tables Design: domains, crawl_tasks, proxies, domain_proxies
+# Core Tables Design
 
 ## Overview
 
-This document provides detailed design for the four most critical tables with focus on:
+This document provides detailed design for the six core tables with focus on:
 - **Scheduled restart** of crawling/parsing tasks
 - **Manual restart** via API
 - **State management** for crawl lifecycle
+- **Product data storage** and change detection
 - **Intelligent proxy-domain mapping** for rotation and minimizing proxy usage
+
+## Tables
+
+1. **domains** - Domain configurations and parser assignments
+2. **crawl_tasks** - Crawl job state and lifecycle management
+3. **products** - Product catalog with attributes (price, rating, brand, etc.)
+4. **images** - Product images metadata
+5. **proxies** - Proxy pool configuration
+6. **domain_proxies** - Domain-to-proxy mapping (junction table)
 
 ---
 
@@ -378,7 +388,213 @@ WHERE id = :task_id;
 
 ---
 
-## 3. proxies Table
+## 3. products Table
+
+### Schema
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PRIMARY KEY | Auto-increment ID |
+| domain_id | INTEGER | FK → domains.id, NOT NULL | Source domain |
+| crawl_task_id | INTEGER | FK → crawl_tasks.id, NULL | Original crawl task that created this product |
+| url | TEXT | NOT NULL | Product page URL |
+| url_hash | VARCHAR(64) | UNIQUE, NOT NULL | SHA256 hash of URL (deduplication) |
+| product_name | VARCHAR(512) | NOT NULL | Product name/title |
+| description | TEXT | NULL | Full product description |
+| price | DECIMAL(10,2) | NULL | Current price |
+| currency | VARCHAR(3) | DEFAULT 'USD' | Currency code (ISO 4217: USD, EUR, GBP) |
+| availability | VARCHAR(50) | NULL | Stock status (in_stock, out_of_stock, preorder, discontinued) |
+| rating | DECIMAL(3,2) | NULL | Product rating (0.00-5.00) |
+| review_count | INTEGER | NULL | Number of reviews |
+| brand | VARCHAR(255) | NULL | Brand name |
+| category | VARCHAR(255) | NULL | Product category |
+| sku | VARCHAR(100) | NULL | Stock keeping unit |
+| content_hash | VARCHAR(64) | NULL | SHA256 hash of product data (detect changes) |
+| metadata | JSON | NULL | Additional metadata (flexible storage for extra fields) |
+| created_at | TIMESTAMP | DEFAULT NOW() | First crawled timestamp |
+| updated_at | TIMESTAMP | DEFAULT NOW() | Last updated timestamp |
+
+### Indexes
+
+```sql
+CREATE INDEX idx_products_domain_id ON products(domain_id);
+CREATE INDEX idx_products_product_name ON products(product_name);
+CREATE INDEX idx_products_price ON products(price);
+CREATE INDEX idx_products_availability ON products(availability);
+CREATE INDEX idx_products_created_at ON products(created_at);
+CREATE INDEX idx_products_url_hash ON products(url_hash);
+CREATE INDEX idx_products_brand ON products(brand);
+CREATE INDEX idx_products_category ON products(category);
+CREATE INDEX idx_products_rating ON products(rating);
+CREATE INDEX idx_products_crawl_task_id ON products(crawl_task_id);
+```
+
+### Design Decisions
+
+**1. `url_hash` for deduplication**:
+- Ensures one product per unique URL
+- SHA256 hash of normalized URL
+- Prevents duplicate products from being inserted
+
+**2. `content_hash` for change detection**:
+- Hash of (product_name + price + description + availability)
+- Parser computes hash and compares with existing
+- If hash differs → UPDATE product, set updated_at = NOW()
+- If hash same → Skip update (no changes)
+
+**3. `metadata` JSON field**:
+- Store additional attributes not in fixed schema
+- Examples: color, size, weight, dimensions, warranty
+- Parser-specific fields without schema changes
+- Queryable via PostgreSQL JSON operators
+
+**4. `crawl_task_id` nullable**:
+- Track which crawl task first discovered this product
+- NULL for products inserted manually or via bulk import
+- Useful for debugging and tracing
+
+**5. `currency` field**:
+- ISO 4217 currency codes (USD, EUR, GBP, JPY, etc.)
+- Defaults to USD
+- Allows multi-currency product catalog
+
+**6. Decimal types for price and rating**:
+- `DECIMAL(10,2)` for price: up to 99,999,999.99
+- `DECIMAL(3,2)` for rating: 0.00 to 5.00
+- Avoids floating-point rounding errors
+
+### Sample Data
+
+```sql
+INSERT INTO products (
+  domain_id, crawl_task_id, url, url_hash, product_name, description,
+  price, currency, availability, rating, review_count, brand, category, sku, content_hash
+)
+VALUES (
+  1,  -- Amazon
+  12345,
+  'https://www.amazon.com/dp/B08N5WRWNW',
+  SHA256('https://www.amazon.com/dp/B08N5WRWNW'),
+  'Sony WH-1000XM4 Wireless Headphones',
+  'Industry-leading noise canceling with Dual Noise Sensor technology...',
+  349.99,
+  'USD',
+  'in_stock',
+  4.8,
+  12543,
+  'Sony',
+  'Electronics > Headphones',
+  'WH1000XM4/B',
+  SHA256('Sony WH-1000XM4...349.99...in_stock')
+);
+```
+
+### Relationships
+
+```
+domains (1) ──< (N) products
+crawl_tasks (1) ──< (N) products
+products (1) ──< (N) images
+```
+
+### Change Detection Logic
+
+**Parser workflow**:
+1. Extract product data from HTML
+2. Compute `content_hash = SHA256(product_name + price + description + availability)`
+3. Check if product exists: `SELECT * FROM products WHERE url_hash = :url_hash`
+4. If exists and `content_hash` differs:
+   ```sql
+   UPDATE products
+   SET
+     product_name = :product_name,
+     price = :price,
+     description = :description,
+     availability = :availability,
+     rating = :rating,
+     review_count = :review_count,
+     content_hash = :content_hash,
+     updated_at = NOW()
+   WHERE url_hash = :url_hash;
+   ```
+5. If not exists:
+   ```sql
+   INSERT INTO products (...) VALUES (...);
+   ```
+
+---
+
+## 4. images Table
+
+### Schema
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| id | INTEGER | PRIMARY KEY | Auto-increment ID |
+| product_id | INTEGER | FK → products.id, NOT NULL | Reference to product |
+| image_url | TEXT | NOT NULL | Original image URL |
+| image_path | VARCHAR(512) | NULL | Local/S3 storage path |
+| alt_text | VARCHAR(512) | NULL | Image alt text/description |
+| image_type | VARCHAR(50) | DEFAULT 'primary' | Type (primary, gallery, thumbnail) |
+| position | INTEGER | DEFAULT 0 | Display order (0 = first) |
+| width | INTEGER | NULL | Image width in pixels |
+| height | INTEGER | NULL | Image height in pixels |
+| file_size | INTEGER | NULL | File size in bytes |
+| created_at | TIMESTAMP | DEFAULT NOW() | Record creation time |
+
+### Indexes
+
+```sql
+CREATE INDEX idx_images_product_id ON images(product_id);
+CREATE INDEX idx_images_image_type ON images(image_type);
+CREATE INDEX idx_images_position ON images(product_id, position);
+```
+
+### Design Decisions
+
+**1. `image_type` enum**:
+- `primary`: Main product image
+- `gallery`: Additional product images
+- `thumbnail`: Small preview image
+- Allows filtering by type
+
+**2. `position` field**:
+- Order images for display (gallery carousel)
+- position = 0 is always the primary image
+- Allows reordering without changing IDs
+
+**3. `image_path` storage**:
+- Stage 1 (MVP): Local file path (`/storage/images/{product_id}/img1.jpg`)
+- Stage 2+: S3 path (`s3://crawler-us-east-data/images/{product_id}/img1.jpg`)
+- NULL if image not downloaded yet
+
+**4. Image metadata (width, height, file_size)**:
+- Populated after download
+- Used for responsive image loading
+- Helps detect broken/invalid images
+
+### Sample Data
+
+```sql
+INSERT INTO images (product_id, image_url, image_type, position, alt_text)
+VALUES
+  (1, 'https://m.media-amazon.com/images/I/71o8Q5XJS5L._AC_SL1500_.jpg', 'primary', 0, 'Sony WH-1000XM4 Black'),
+  (1, 'https://m.media-amazon.com/images/I/61fU76ytoeL._AC_SL1500_.jpg', 'gallery', 1, 'Side view'),
+  (1, 'https://m.media-amazon.com/images/I/71KFKG42IaL._AC_SL1500_.jpg', 'gallery', 2, 'Carrying case');
+```
+
+### Cascade Deletion
+
+```sql
+-- When product is deleted, delete all images
+ALTER TABLE images
+  ADD CONSTRAINT fk_images_product
+  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE;
+```
+
+---
+
+## 5. proxies Table
 
 ### Schema
 
@@ -491,7 +707,7 @@ WHERE id = :proxy_id;
 
 ---
 
-## 4. domain_proxies Table (Junction Table)
+## 6. domain_proxies Table (Junction Table)
 
 ### Purpose
 
