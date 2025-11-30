@@ -377,3 +377,23 @@ Session focused on scaling architecture decisions, core table design enhancement
 - Workers: 100 per region (50 crawler + 50 parser)
 - Peak message rate: 2,580 msg/sec consistently
 - **100% consistency achieved** across all scale architecture documents
+
+---
+
+## Session 13 - 2025-11-30
+
+**User Request**: Run Alembic migrations and implement 20 API endpoints
+
+**Summary**:
+- Set up Alembic migrations in Docker: fixed Python 3.13 compatibility (psycopg2→psycopg3), encoding issues, config validation, reserved names
+- Implemented 20 API endpoints: 3 tasks, 3 domains, 7 proxies, 6 domain-proxy mappings, 1 stats
+- Created 4 schema files and 4 route files with pagination, filtering, success rate calculations
+- Provided Swagger UI tutorial for testing
+
+**Key Fixes**:
+- Switched psycopg2 → psycopg3 for Python 3.13
+- Added libpq-dev to Dockerfile
+- Renamed metadata → extra_attributes (SQLAlchemy reserved)
+- URL deduplication via SHA256 hash
+
+**Status**: 20/38 endpoints complete

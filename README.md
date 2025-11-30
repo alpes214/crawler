@@ -2,41 +2,27 @@
 
 A scalable web crawler system for extracting product information from e-commerce websites.
 
-## Features
-
-- **Distributed Crawling**: Async crawlers with proxy rotation
-- **Intelligent Parsing**: Site-specific parsers for accurate data extraction
-- **Task Management**: Celery-based distributed task queue with priority support
-- **Full-Text Search**: Elasticsearch integration for full text search and further text processing (at the moment only for product description)
-- **Admin API**: REST API for managing crawl jobs and monitoring progress
-- **Query API**: REST API for filtering and searching products
-
-## Technology Stack
-
-### Core Technologies
-- **FastAPI**: Web framework for REST APIs
-- **PostgreSQL**: Primary database for structured data
-- **Elasticsearch**: Full-text search engine
-- **RabbitMQ + Celery**: Distributed task queue
-- **aiohttp**: Async HTTP client for crawling
-- **Docker Compose**: Container orchestration (MVP)
-
-### Scale & Production Technologies
-- **Kubernetes**: Container orchestration at scale
-- **Redis**: Caching layer for high-traffic API queries
-- **S3/MinIO**: Distributed object storage for HTML/images
-- **ClickHouse**: Columnar database for analytics queries
-- **Prometheus + Grafana**: Monitoring and metrics visualization
-- **pgBouncer**: PostgreSQL connection pooling
-- **CloudFlare CDN**: Global edge caching and DDoS protection
-- **GeoDNS (Route53/NS1)**: Geographic traffic routing for multi-region deployments
-
 ## Documentation
 
-- [Software Requirements Document](SOFTWARE_REQUIREMENTS_DOCUMENT.md)
-- [Overall Architecture (Big scale)](SCALE_ARCHITECTURE_DECISIONS.md)
-- [Single region architecture diagram](ARCHITECTURE_DECISIONS.md)
-- [API Documentation](http://localhost:8000/docs) (when running)
+### Requirements & Features
+- [Software Requirements Document](SOFTWARE_REQUIREMENTS_DOCUMENT.md) - Functional and non-functional requirements
+- [ML Ranking Search Design](ML_RANKING_SEARCH_DESIGN.md) - Machine learning search ranking (future)
+
+### Architecture & Design
+- [Architecture Decisions (MVP)](ARCHITECTURE_DECISIONS.md) - Single region MVP architecture
+- [Architecture Diagram (MVP)](ARCHITECTURE_DIAGRAM.md) - Visual system overview for MVP
+- [Scale Architecture Decisions](SCALE_ARCHITECTURE_DECISIONS.md) - Multi-region scale architecture
+- [Scale Architecture Diagram](SCALE_ARCHITECTURE_DIAGRAM.md) - Visual system overview at scale
+- [Scale Load Estimations](SCALE_LOAD_ESTIMATIONS.md) - Capacity planning and calculations
+
+### Database & API Design
+- [Core Tables Design](CORE_TABLES_DESIGN.md) - Database schema and state machines
+- [Core API Design](CORE_API_DESIGN.md) - Complete API endpoint specifications
+- [Proxy Domain Strategy](PROXY_DOMAIN_STRATEGY.md) - Proxy rotation and domain mapping
+
+### API Documentation
+- [Swagger UI](http://localhost:8000/docs) - Interactive API testing (when running)
+- [ReDoc](http://localhost:8000/redoc) - Alternative API documentation (when running)
 
 ## Project Structure
 
@@ -133,35 +119,28 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-## Usage
-
-### Submit crawl job
+### Debugging & Development Workflow
 
 ```bash
-curl -X POST http://localhost:8000/api/crawl/submit \
-  -H "Content-Type: application/json" \
-  -d '{
-    "urls": ["https://example.com/product1", "https://example.com/product2"],
-    "priority": 5
-  }'
-```
+# View logs
+docker-compose logs -f fastapi
+docker-compose logs -f crawler-worker
+docker-compose logs -f parser-worker
 
-### Query products
+# Rebuild after code changes
+docker-compose up -d --build
 
-```bash
-# Filter by price
-curl "http://localhost:8000/api/products?price_min=10&price_max=100"
+# Rebuild specific service
+docker-compose up -d --build fastapi
 
-# Full-text search
-curl -X POST http://localhost:8000/api/products/search \
-  -H "Content-Type: application/json" \
-  -d '{"query": "wireless headphones"}'
-```
+# Run shell in container
+docker-compose exec fastapi bash
 
-### Monitor crawl status
+# Check service status
+docker-compose ps
 
-```bash
-curl http://localhost:8000/api/crawl/status
+# Restart service
+docker-compose restart fastapi
 ```
 
 ## Configuration
