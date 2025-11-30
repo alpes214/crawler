@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # Database Configuration
     database_url: PostgresDsn = Field(
-        default="postgresql://crawler:password@localhost:5432/crawler",
+        default="postgresql+psycopg://crawler:password@localhost:5432/crawler",
         description="PostgreSQL database URL"
     )
 
@@ -108,12 +108,15 @@ class Settings(BaseSettings):
         env_file = ".env"
         env_file_encoding = "utf-8"
         case_sensitive = False
+        extra = "ignore"  # Ignore extra fields from .env
 
     def get_database_url_sync(self) -> str:
-        """Get database URL as string for SQLAlchemy."""
-        if isinstance(self.database_url, str):
-            return self.database_url
-        return str(self.database_url)
+        """Get database URL as string for SQLAlchemy with psycopg driver."""
+        url = str(self.database_url) if not isinstance(self.database_url, str) else self.database_url
+        # Replace postgresql:// with postgresql+psycopg:// to use psycopg3
+        if url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+psycopg://", 1)
+        return url
 
 
 # Global settings instance

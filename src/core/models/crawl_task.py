@@ -1,10 +1,3 @@
-"""
-CrawlTask model - Manages crawl job lifecycle and state.
-
-Each crawl task represents a single URL crawling job with state tracking,
-retry logic, scheduling, and recrawl capabilities.
-"""
-
 from enum import Enum
 from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Boolean, Interval, ForeignKey
 from sqlalchemy.orm import relationship
@@ -36,22 +29,6 @@ class CrawlTaskStatus(str, Enum):
 
 
 class CrawlTask(Base):
-    """
-    Crawl task lifecycle management.
-
-    Tracks the complete lifecycle of a URL crawl job:
-    - Scheduling and priority
-    - Status transitions (pending ’ crawling ’ parsing ’ completed)
-    - Retry logic with exponential backoff
-    - Recurring crawls with configurable frequency
-    - Error tracking and debugging
-
-    Relationships:
-        - Many-to-One: crawl_task ’ domain
-        - Many-to-One: crawl_task ’ proxy (optional)
-        - One-to-Many: crawl_task ’ products
-    """
-
     __tablename__ = "crawl_tasks"
 
     # Primary key

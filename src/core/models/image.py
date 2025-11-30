@@ -1,10 +1,3 @@
-"""
-Image model - Stores product images metadata.
-
-Each image represents a product image with storage location, metadata,
-and display ordering for gallery functionality.
-"""
-
 from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, ForeignKey
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -12,19 +5,6 @@ from src.core.database import Base
 
 
 class Image(Base):
-    """
-    Product image metadata and storage.
-
-    Tracks product images with:
-    - Original URL and storage path
-    - Image metadata (alt text, dimensions, file size)
-    - Image type (primary, gallery, thumbnail)
-    - Display ordering (position)
-
-    Relationships:
-        - Many-to-One: image ’ product
-    """
-
     __tablename__ = "images"
 
     # Primary key

@@ -1,11 +1,3 @@
-"""
-Product model - Stores product catalog with all attributes.
-
-Each product represents a crawled item with attributes like name, price,
-rating, brand, category, and description. Includes change detection via
-content hashing.
-"""
-
 from sqlalchemy import Column, Integer, String, Text, TIMESTAMP, Numeric, ForeignKey, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -13,22 +5,6 @@ from src.core.database import Base
 
 
 class Product(Base):
-    """
-    Product catalog with attributes and change detection.
-
-    Stores complete product information:
-    - Basic attributes (name, description, price, currency)
-    - Quality signals (rating, review_count, availability)
-    - Categorization (brand, category, SKU)
-    - Change detection (content_hash for detecting updates)
-    - Flexible metadata (JSON field for parser-specific attributes)
-
-    Relationships:
-        - Many-to-One: product ’ domain
-        - Many-to-One: product ’ crawl_task (optional)
-        - One-to-Many: product ’ images
-    """
-
     __tablename__ = "products"
 
     # Primary key
@@ -139,7 +115,7 @@ class Product(Base):
     )
 
     # Flexible metadata
-    metadata = Column(
+    extra_attributes = Column(
         JSON,
         nullable=True,
         comment="Additional metadata (color, size, weight, etc.)"
@@ -247,7 +223,7 @@ class Product(Base):
         allowed_fields = {
             'product_name', 'description', 'price', 'currency',
             'availability', 'rating', 'review_count',
-            'brand', 'category', 'sku', 'metadata'
+            'brand', 'category', 'sku', 'extra_attributes'
         }
 
         for key, value in data.items():

@@ -1,13 +1,3 @@
-"""
-DomainProxy model - Junction table for many-to-many relationship between domains and proxies.
-
-This table enables:
-- Dedicated proxy sets per domain (not global pool)
-- Per-domain performance tracking for each proxy
-- Intelligent LRU rotation within domain's proxy pool
-- Domain-specific proxy health (same proxy performs differently per domain)
-"""
-
 from sqlalchemy import Column, Integer, Boolean, TIMESTAMP, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -15,22 +5,6 @@ from src.core.database import Base
 
 
 class DomainProxy(Base):
-    """
-    Junction table mapping domains to proxies with per-domain performance tracking.
-
-    Relationships:
-        - Many-to-Many: domains <-> proxies
-        - One domain has many proxies
-        - One proxy can serve many domains
-
-    Example:
-        Proxy #5 for Amazon.com:
-          - success_rate: 98%, avg_response_time: 450ms
-        Proxy #5 for eBay.com:
-          - success_rate: 75%, avg_response_time: 1200ms
-        → Same proxy, different performance per domain!
-    """
-
     __tablename__ = "domain_proxies"
 
     # Primary key

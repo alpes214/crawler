@@ -1,10 +1,3 @@
-"""
-Domain model - Stores domain configurations and parser assignments.
-
-Each domain represents a website to crawl with specific settings like
-crawl delay, parser assignment, and robots.txt caching.
-"""
-
 from sqlalchemy import Column, Integer, String, Boolean, TIMESTAMP, Text, Interval
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -12,21 +5,6 @@ from src.core.database import Base
 
 
 class Domain(Base):
-    """
-    Domain configuration and settings.
-
-    Represents a website/domain to crawl with associated configuration:
-    - Parser assignment (which parser to use)
-    - Crawl delay and concurrency limits
-    - Robots.txt caching
-    - Active/inactive status
-
-    Relationships:
-        - One domain has many crawl_tasks
-        - One domain has many products
-        - One domain has many domain_proxies (proxy mappings)
-    """
-
     __tablename__ = "domains"
 
     # Primary key
