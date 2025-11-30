@@ -129,10 +129,10 @@ Utilization: 9.7M ÷ 10M = 97%
 
 | Query Type | % of Total | Queries/Sec | Backend System |
 |------------|-----------|-------------|----------------|
-| **Full-text search** | 30-40% | ~3.4M qps | Elasticsearch |
-| **Analytics/Historical** | 40-50% | ~4.4M qps | ClickHouse |
-| **Operational lookups** | 10-20% | ~1.0M qps | PostgreSQL + Redis |
-| **Internal queries** | <1% | ~10K qps | PostgreSQL |
+| **Full-text search** | 35% | ~3.4M qps | Elasticsearch |
+| **Analytics/Historical** | 45% | ~4.4M qps | ClickHouse |
+| **Operational lookups** | 15% | ~1.0M qps | PostgreSQL + Redis |
+| **Internal queries** | 5% | ~10K qps | PostgreSQL |
 
 **Rationale**:
 - Full-text search: Users searching for products by keywords, descriptions

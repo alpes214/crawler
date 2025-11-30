@@ -189,7 +189,7 @@ Each region is independent and identical. This shows the detailed architecture f
 │  │  Cluster Capacity:                                                │     │
 │  │  - Throughput: 30,000-150,000 msg/sec                             │     │
 │  │  - Your load: 860 msg/sec (0.6-2.9% utilization)                  │     │
-│  │  - Peak load: 2,571 msg/sec (1.7-8.6% utilization)                │     │
+│  │  - Peak load: 2,580 msg/sec (1.7-8.6% utilization)                │     │
 │  │  - Burst load: 10,000 msg/sec (6.7-33% utilization)               │     │
 │  └───────────────────────────────────────────────────────────────────┘     │
 │                                                                             │
@@ -269,7 +269,7 @@ Regional Metrics:
 ├─ Database Read: 500K queries/second capacity (1 primary + 2-10 replicas)
 ├─ Elasticsearch: 100K docs/second indexing, 85K search qps (with 97% caching)
 ├─ ClickHouse: 4.4M analytics queries/second at 44% utilization
-└─ Monthly Cost: ~$174,000 per region
+└─ Monthly Cost: ~$193,710 per region
 ```
 
 ---
