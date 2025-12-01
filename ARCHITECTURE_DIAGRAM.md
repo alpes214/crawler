@@ -4,7 +4,7 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Product Crawler System                             │
+│                           Product Crawler System                            │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────┐                              ┌──────────────┐
@@ -12,82 +12,83 @@
 │   Client     │                              │    Client    │
 └──────┬───────┘                              └──────┬───────┘
        │                                             │
-       │ POST /api/crawl/submit                     │ GET /api/products
-       │ GET /api/crawl/status                      │ POST /api/products/search
+       │ POST /api/crawl/submit                      │ GET /api/products
+       │ GET /api/crawl/status                       │ POST /api/products/search
        │                                             │
        └────────────────────┬────────────────────────┘
                             │
                             ▼
                  ┌────────────────────┐
                  │                    │
-                 │  FastAPI Server    │
-                 │ (Admin + Query API)│
-                 │                    │
-                 └──────┬─────────────┘
-                        │
-         ┏━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━┓
-         ▼                              ▼
-    Write (crawl_tasks)            Read (products)
-         │                              │
-         ▼                              ▼
-┌─────────────────────┐        ┌─────────────────────┐        ┌──────────────────┐
-│                     │        │                     │        │  Redis Cache     │
-│    PostgreSQL       │───────▶│   Elasticsearch     │        │  (Stage 2+)      │
-│  (Source of Truth)  │        │  (Full-Text Search) │        │                  │
-│                     │        │                     │        │ Operational      │
-│  Tables:            │        │  Indexes:           │        │ query cache      │
-│  - domains          │        │  - products         │        │ 90% hit rate     │
-│  - crawl_tasks      │        │                     │        └──────────────────┘
-│  - products         │        └─────────────────────┘
-│  - images           │                   ▲
-│  - proxies          │                   │
-│                     │                   │ Write (descriptions)
-└──────┬──────────────┘                   │
-       │                                  │
-       │ Read pending tasks               │
-       │                                  │
-       │        ┌─────────────────────────┴──────────┐
-       │        │                                    │
-       │        │                                    │
-       ▼        ▼                                    ▼
-              ┌──────────────────┐        ┌──────────────────┐
-              │  ClickHouse      │        │  ML Ranking      │
-              │  (Stage 2+)      │        │  Service         │
-              │                  │        │  (Stage 2+)      │
-              │ Analytics:       │        │                  │
-              │ - Price history  │        │ Reranks search   │
-              │ - Trends         │        │ results via ML   │
-              │ - ML features    │        │ (LightGBM)       │
-              └──────────────────┘        └──────────────────┘
-                     ▲
-                     │ ETL (periodic)
-                     │
-┌─────────────────────────────────────────┴───────────────────────────────────┐
-│                                                                             │
-│                         RabbitMQ + Celery                                   │
-│                                                                             │
+                 │  FastAPI Server    │─────────────────────────────────────────────┐
+                 │ (Admin + Query API)│                                             │
+                 │                    │                                             │
+                 └──────┬─────────────┘                                             │
+                        │                                                           │
+         ┏━━━━━━━━━━━━━━┻━━━━━━━━━━━━━━┓                                            │
+         ▼                              ▼                                           │
+    Write (crawl_tasks)            Read (products)                                  │
+         │                              │                                           │
+         ▼                              ▼                                           │
+┌─────────────────────┐        ┌─────────────────────┐        ┌──────────────────┐  │
+│                     │        │                     │        │  Redis Cache     │  │
+│    PostgreSQL       │───────▶│   Elasticsearch     │        │  (Stage 2+)      │  │
+│  (Source of Truth)  │        │  (Full-Text Search) │        │                  │  │
+│                     │        │                     │        │ Operational      │  │
+│  Tables:            │        │  Indexes:           │        │ query cache      │  │
+│  - domains          │        │  - products         │        │ 90% hit rate     │  │
+│  - crawl_tasks      │        │                     │        └──────────────────┘  │
+│  - products         │        └─────────────────────┘                              │
+│  - images           │                   ▲                                         │
+│  - proxies          │                   │                                         │
+│                     │                   │ Write (descriptions)                    │
+└──────┬──────────────┘                   │                                         │
+       │                                  │                                         │
+       │ Read pending tasks               │                                         │
+       │                                  │                                         │
+       │        ┌─────────────────────────┴──────────┐                              │
+       │        │                                    │                              │
+       │        │                                    │                              │
+       │        ▼                                    ▼                              │
+       │      ┌──────────────────┐        ┌──────────────────┐                      │
+       │      │  ClickHouse      │        │  ML Ranking      │                      │
+       │      │  (Stage 2+)      │        │  Service         │                      │
+       │      │                  │        │  (Stage 2+)      │                      │
+       │      │ Analytics:       │        │                  │                      │
+       │      │ - Price history  │        │ Reranks search   │                      │
+       │      │ - Trends         │        │ results via ML   │                      │
+       │      │ - ML features    │        │ (LightGBM)       │                      │
+       │      └──────────────────┘        └──────────────────┘                      │
+       │             ▲                                                              │
+       │             │ ETL (periodic)                                               │
+       │             │                                                              │
+       ▼             │                             Submit tasks (on-demand crawls)  │
+┌────────────────────────────────────────────────────────────────────────────┐      │
+│                                                                            │      │
+│                         RabbitMQ + Celery                                  │◄─────┘
+│                                                                            │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │  Celery Beat Scheduler                                              │   │
 │  │  - Reads crawl_tasks from PostgreSQL                                │   │
 │  │  - Publishes tasks to queues based on priority                      │   │
 │  └────────────────────────────┬────────────────────────────────────────┘   │
-│                               │                                             │
-│                               │ Publish                                     │
-│              ┌────────────────┼────────────────┐                            │
-│              │                │                │                            │
-│              ▼                ▼                ▼                            │
-│      ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                    │
-│      │   crawl     │  │    parse    │  │  priority   │                    │
-│      │   queue     │  │    queue    │  │   queue     │                    │
-│      └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                    │
+│                               │                                            │
+│                               │ Publish                                    │
+│              ┌────────────────┼────────────────┐                           │
+│              │                │                │                           │
+│              ▼                ▼                ▼                           │
+│      ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                     │
+│      │   crawl     │  │    parse    │  │  priority   │                     │
+│      │   queue     │  │    queue    │  │   queue     │                     │
+│      └──────┬──────┘  └──────┬──────┘  └──────┬──────┘                     │
 │             │                │                │                            │
 │             │ Consume        │ Consume        │ Consume                    │
 │             ▼                ▼                ▼                            │
-│      ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                    │
-│      │  Crawler    │  │   Parser    │  │  Priority   │                    │
-│      │  Workers    │  │   Workers   │  │  Workers    │                    │
-│      │  (5-20)     │  │   (5-20)    │  │   (2-5)     │                    │
-│      └──────┬──────┘  └──────┬──────┘  └─────────────┘                    │
+│      ┌─────────────┐  ┌─────────────┐  ┌─────────────┐                     │
+│      │  Crawler    │  │   Parser    │  │  Priority   │                     │
+│      │  Workers    │  │   Workers   │  │  Workers    │                     │
+│      │  (5-20)     │  │   (5-20)    │  │   (2-5)     │                     │
+│      └──────┬──────┘  └──────┬──────┘  └─────────────┘                     │
 │             │                │                                             │
 └─────────────┼────────────────┼─────────────────────────────────────────────┘
               │                │
